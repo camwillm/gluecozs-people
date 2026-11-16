@@ -1,0 +1,428 @@
+{{define "flash"}}
+  {{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
+  {{if .Notice}}<div class="alert alert-ok" role="status">{{.Notice}}</div>{{end}}
+{{end}}
+
+{{define "list"}}
+<div class="stack">
+  <div class="page-head">
+    <h1>People</h1>
+    <div class="row">
+      <a class="btn" href="/m/people/new">Add a person</a>
+      <a class="btn btn-ghost" href="/m/people/galaxy">Galaxy</a>
+      <a class="btn btn-ghost" href="/">Back to Abode</a>
+    </div>
+  </div>
+
+  {{template "flash" .}}
+
+  <form class="panel row" method="get" action="/m/people">
+    <label class="field" style="flex:2;min-width:200px">Search
+      <input type="search" name="q" value="{{.Query}}" placeholder="name, company, city, bucket">
+    </label>
+    <label class="field">Group by
+      <select name="group">
+        <option value="tag"{{if eq .GroupBy "tag"}} selected{{end}}>Bucket</option>
+        <option value="company"{{if eq .GroupBy "company"}} selected{{end}}>Company</option>
+        <option value="city"{{if eq .GroupBy "city"}} selected{{end}}>City</option>
+        <option value="none"{{if eq .GroupBy "none"}} selected{{end}}>Nothing</option>
+      </select>
+    </label>
+    <button class="btn btn-ghost" type="submit">Apply</button>
+  </form>
+
+  {{if .Due}}
+  <section class="panel stack">
+    <h2>Reach out <span class="muted">{{len .Due}} waiting</span></h2>
+    <ul class="events">
+      {{range .Due}}
+      <li>
+        <span class="when">{{.OverdueText}}</span>
+        <span class="title"><a href="/m/people/p?id={{.ID}}">{{.Name}}</a>{{if .Meta}} <span class="muted">{{.Meta}}</span>{{end}}</span>
+        <span class="actions">
+          <form method="post" action="/m/people/touch">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <input type="hidden" name="kind" value="text">
+            <input type="hidden" name="from" value="list">
+            <button class="btn btn-sm" type="submit">I reached out</button>
+          </form>
+        </span>
+      </li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  {{if .Bdays}}
+  <section class="panel stack">
+    <h2>Birthdays <span class="muted">next 30 days</span></h2>
+    <ul class="events">
+      {{range .Bdays}}
+      <li><span class="when">{{.When}}</span>
+        <span class="title">🎂 <a href="/m/people/p?id={{.ID}}">{{.Name}}</a></span></li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  <section class="panel stack">
+    <h2>Everyone <span class="muted">{{.Total}}</span></h2>
+    {{if not .Groups}}<p class="muted">Nobody here yet. Add the people worth keeping up with.</p>{{end}}
+    {{range .Groups}}
+    <div class="stack" style="gap:8px">
+      <p class="day-label">{{.Label}}</p>
+      <ul class="events">
+        {{range .Rows}}
+        <li>
+          <span class="title"><a href="/m/people/p?id={{.ID}}">{{.Name}}</a>{{if .Meta}} <span class="muted">{{.Meta}}</span>{{end}}</span>
+          {{if .OverdueText}}<span class="tag tag-warn">{{.OverdueText}}</span>{{end}}
+          {{if .Pipeline}}<span class="tag">{{.Pipeline}}</span>{{end}}
+          {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
+        </li>
+        {{end}}
+      </ul>
+    </div>
+    {{end}}
+  </section>
+</div>
+{{end}}
+
+{{define "form"}}
+<div class="stack">
+  <div class="page-head">
+    <h1>{{if .IsNew}}Add a person{{else}}Edit{{end}}</h1>
+    <div class="row"><a class="btn btn-ghost" href="/m/people">Back to People</a></div>
+  </div>
+
+  {{template "flash" .}}
+
+  <form class="panel stack" method="post" action="{{if .IsNew}}/m/people/new{{else}}/m/people/update{{end}}">
+    {{if not .IsNew}}<input type="hidden" name="id" value="{{.Form.ID}}">{{end}}
+    <div class="grid">
+      <label class="field">Name<input name="name" value="{{.Form.Name}}" required></label>
+      <label class="field">Company<input name="company" value="{{.Form.Company}}"></label>
+      <label class="field">City<input name="city" value="{{.Form.City}}"></label>
+      <label class="field">Phone<input name="phone" value="{{.Form.Phone}}" inputmode="tel"></label>
+      <label class="field">Email<input name="email" value="{{.Form.Email}}" inputmode="email"></label>
+      <label class="field">Birthday (YYYY-MM-DD or MM-DD)<input name="birthday" value="{{.Form.Birthday}}" placeholder="08-22"></label>
+      <label class="field">Reach out every … days<input name="cadence" value="{{.Form.Cadence}}" inputmode="numeric" placeholder="30"></label>
+      <label class="field">Last contacted (YYYY-MM-DD)<input name="last_contact" value="{{.Form.LastContact}}"></label>
+      <label class="field">Pipeline
+        <select name="pipeline">
+          <option value="">—</option>
+          <option{{if eq .Form.Pipeline "to reach out"}} selected{{end}}>to reach out</option>
+          <option{{if eq .Form.Pipeline "chatted"}} selected{{end}}>chatted</option>
+          <option{{if eq .Form.Pipeline "followed up"}} selected{{end}}>followed up</option>
+          <option{{if eq .Form.Pipeline "referred / hired"}} selected{{end}}>referred / hired</option>
+        </select>
+      </label>
+    </div>
+    <label class="field">Buckets, separated by commas
+      <input name="tags" value="{{.Form.Tags}}" placeholder="tech, real estate, vibes, family"></label>
+    <label class="field">Why they matter, one line per bucket, as “bucket: why”
+      <textarea name="why" rows="3" placeholder="tech: senior DS, honest career advice&#10;vibes: big-brother energy">{{.Form.Why}}</textarea></label>
+    <label class="field">How we met<input name="how_met" value="{{.Form.HowMet}}"></label>
+    <label class="field">Notes (never sent to the AI)
+      <textarea name="notes" rows="3">{{.Form.Notes}}</textarea></label>
+    {{if not .IsNew}}
+    <label class="check"><input type="checkbox" name="archived" value="1"{{if .Form.Archived}} checked{{end}}> Archived (kept, but off every list and the map)</label>
+    {{end}}
+    <div class="row"><button class="btn" type="submit">Save</button></div>
+  </form>
+
+  {{if not .IsNew}}
+  <form class="panel row" method="post" action="/m/people/delete"
+        onsubmit="return confirm('Remove this person and everything logged about them?')">
+    <input type="hidden" name="id" value="{{.Form.ID}}">
+    <button class="btn btn-danger" type="submit">Remove this person</button>
+  </form>
+  {{end}}
+</div>
+{{end}}
+
+{{define "detail"}}
+<div class="stack">
+  <div class="page-head">
+    <h1>{{.Person.Name}}</h1>
+    <div class="row">
+      <a class="btn btn-ghost" href="/m/people/edit?id={{.Person.ID}}">Edit</a>
+      <a class="btn btn-ghost" href="/m/people">Back to People</a>
+    </div>
+  </div>
+
+  {{template "flash" .}}
+  {{if .Overdue}}<div class="alert alert-warn" role="alert">Reach out: {{.Overdue}}.</div>{{end}}
+  {{if .BirthdayT}}<div class="alert alert-ok" role="status">🎂 Birthday {{.BirthdayT}}.</div>{{end}}
+
+  <section class="panel stack">
+    <h2>About</h2>
+    <p class="muted">
+      {{with .Person.Company}}{{.}} · {{end}}{{with .Person.City}}{{.}} · {{end}}
+      {{with .Person.Phone}}{{.}} · {{end}}{{with .Person.Email}}{{.}}{{end}}
+    </p>
+    {{if .WhyRows}}
+    <ul class="plain">
+      {{range .WhyRows}}<li><span class="tag">{{.Tag}}</span> {{if .Text}}{{.Text}}{{else}}<span class="muted">—</span>{{end}}</li>{{end}}
+    </ul>
+    {{end}}
+    {{with .Person.HowMet}}<p class="muted">How we met: {{.}}</p>{{end}}
+    {{with .Person.Pipeline}}<p class="muted">Pipeline: {{.}}</p>{{end}}
+    {{with .Person.Notes}}<p>{{.}}</p>{{end}}
+  </section>
+
+  <section class="panel stack">
+    <h2>Log a touch</h2>
+    <form class="row" method="post" action="/m/people/touch">
+      <input type="hidden" name="id" value="{{.Person.ID}}">
+      <label class="field">What
+        <select name="kind"><option>text</option><option>call</option><option>met</option><option>event</option><option>other</option></select>
+      </label>
+      <label class="field">When<input type="date" name="date"></label>
+      <label class="field" style="flex:2;min-width:180px">Note<input name="note" placeholder="optional"></label>
+      <button class="btn" type="submit">Log it</button>
+    </form>
+    {{if .Touches}}
+    <ul class="events">
+      {{range .Touches}}
+      <li><span class="when">{{.Date}}</span><span class="title">{{.Kind}}{{with .Note}} · {{.}}{{end}}</span></li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">Nothing logged yet.</p>{{end}}
+  </section>
+
+  <section class="panel stack">
+    <h2>Connections</h2>
+    {{if .Conns}}
+    <ul class="events">
+      {{range .Conns}}
+      <li>
+        <span class="title"><a href="/m/people/p?id={{.OtherID}}">{{.OtherName}}</a>
+          {{with .Label}}<span class="muted">— {{.}}</span>{{end}}
+          {{if eq .Source "ai"}}<span class="tag">AI</span>{{end}}</span>
+        <span class="actions">
+          <form method="post" action="/m/people/disconnect">
+            <input type="hidden" name="id" value="{{$.Person.ID}}">
+            <input type="hidden" name="conn" value="{{.ID}}">
+            <button class="btn btn-sm btn-ghost" type="submit">Unlink</button>
+          </form>
+        </span>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">No connections yet.</p>{{end}}
+    {{if .Others}}
+    <form class="row" method="post" action="/m/people/connect">
+      <input type="hidden" name="id" value="{{.Person.ID}}">
+      <label class="field">Connect to
+        <select name="other">{{range .Others}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+      </label>
+      <label class="field" style="flex:2;min-width:180px">How<input name="label" placeholder="went to Morgan together"></label>
+      <button class="btn" type="submit">Link them</button>
+    </form>
+    {{end}}
+  </section>
+</div>
+{{end}}
+
+{{define "confirm"}}
+<div class="stack">
+  <div class="page-head">
+    <h1>Suggested connections</h1>
+    <div class="row"><a class="btn btn-ghost" href="/m/people/galaxy">Back to the Galaxy</a></div>
+  </div>
+  {{template "flash" .}}
+  {{if .Say}}<p class="muted">{{.Say}}</p>{{end}}
+  {{if .Suggestions}}
+  <form class="panel stack" method="post" action="/m/people/suggest/apply">
+    <input type="hidden" name="token" value="{{.Token}}">
+    <ul class="events">
+      {{range .Suggestions}}
+      <li>
+        <label class="check" style="flex:1">
+          <input type="checkbox" name="keep" value="{{.ID}}" checked>
+          <span><strong>{{.OtherID}}</strong> ↔ <strong>{{.OtherName}}</strong>{{with .Label}} <span class="muted">— {{.}}</span>{{end}}</span>
+        </label>
+      </li>
+      {{end}}
+    </ul>
+    <div class="row">
+      <button class="btn" type="submit">Add the checked ones</button>
+      <button class="btn btn-ghost" type="submit" formaction="/m/people/suggest/discard">Discard all</button>
+    </div>
+    <p class="muted">Nothing is saved until you choose here.</p>
+  </form>
+  {{end}}
+</div>
+{{end}}
+
+{{define "galaxy"}}
+<div class="stack">
+  <div class="page-head">
+    <h1>Galaxy</h1>
+    <div class="row">
+      {{if .AIReady}}
+      <form method="post" action="/m/people/suggest"><button class="btn btn-ghost" type="submit">Suggest connections</button></form>
+      {{end}}
+      <a class="btn btn-ghost" href="/m/people">Back to People</a>
+    </div>
+  </div>
+
+  {{template "flash" .}}
+
+  <form class="panel row" method="get" action="/m/people/galaxy">
+    <label class="field">Bucket
+      <select name="tag">
+        <option value="">All</option>
+        {{range .TagOpts}}<option value="{{.}}"{{if eq . $.TagFilter}} selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <button class="btn btn-ghost" type="submit">Apply</button>
+    <span class="muted">Solid lines are links you made. Dashed lines mean the same company. Drag a star to move it; tap one to open the person.</span>
+  </form>
+
+  <section class="panel galaxy-wrap">
+    <canvas id="galaxy" aria-label="A map of people and their connections"></canvas>
+    <div id="galaxy-legend" class="row galaxy-legend"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var data = {{.GraphJSON}};
+  var canvas = document.getElementById('galaxy');
+  if (!canvas || !canvas.getContext) return;
+  var ctx = canvas.getContext('2d');
+
+  var palette = ['#14766D', '#C9731A', '#4A6FB5', '#8E5AA8', '#4FAE7B', '#B5524A', '#7A8B2F', '#3F5F58'];
+  var tagColor = {};
+  (data.tags || []).forEach(function (t, i) { tagColor[t.toLowerCase()] = palette[i % palette.length]; });
+  function colorOf(n) { return n.tag ? (tagColor[n.tag.toLowerCase()] || '#3F5F58') : '#9CB8AD'; }
+
+  // Legend
+  var legend = document.getElementById('galaxy-legend');
+  (data.tags || []).forEach(function (t) {
+    var chip = document.createElement('span');
+    chip.className = 'tag';
+    chip.innerHTML = '<i style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:' +
+      (tagColor[t.toLowerCase()] || '#3F5F58') + '"></i>';
+    chip.appendChild(document.createTextNode(t));
+    legend.appendChild(chip);
+  });
+
+  var W = 0, H = 0, dpr = Math.max(1, window.devicePixelRatio || 1);
+  function resize() {
+    W = canvas.parentElement.clientWidth - 0;
+    H = Math.max(360, Math.min(640, Math.round(window.innerHeight * 0.6)));
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', function () { resize(); alpha = Math.max(alpha, 0.3); });
+
+  var nodes = (data.nodes || []).map(function (n, i) {
+    var a = (i / Math.max(1, data.nodes.length)) * Math.PI * 2;
+    return { d: n, x: W / 2 + Math.cos(a) * W / 4, y: H / 2 + Math.sin(a) * H / 4, vx: 0, vy: 0 };
+  });
+  var byId = {};
+  nodes.forEach(function (n) { byId[n.d.id] = n; });
+  var links = (data.links || []).map(function (l) {
+    return { s: byId[l.s], t: byId[l.t], d: l };
+  }).filter(function (l) { return l.s && l.t; });
+
+  var alpha = 1, drag = null, hover = null;
+
+  function step() {
+    // repulsion between every pair (fine up to a few hundred people)
+    for (var i = 0; i < nodes.length; i++) {
+      for (var j = i + 1; j < nodes.length; j++) {
+        var a = nodes[i], b = nodes[j];
+        var dx = b.x - a.x, dy = b.y - a.y;
+        var d2 = dx * dx + dy * dy + 0.01;
+        var f = 2600 / d2;
+        var d = Math.sqrt(d2);
+        var fx = (dx / d) * f, fy = (dy / d) * f;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+      }
+    }
+    // springs along links
+    links.forEach(function (l) {
+      var rest = l.d.kind === 'company' ? 150 : 110;
+      var dx = l.t.x - l.s.x, dy = l.t.y - l.s.y;
+      var d = Math.sqrt(dx * dx + dy * dy) || 1;
+      var f = (d - rest) * 0.02;
+      var fx = (dx / d) * f, fy = (dy / d) * f;
+      l.s.vx += fx; l.s.vy += fy; l.t.vx -= fx; l.t.vy -= fy;
+    });
+    // gentle pull to the middle, then move
+    nodes.forEach(function (n) {
+      n.vx += (W / 2 - n.x) * 0.004; n.vy += (H / 2 - n.y) * 0.004;
+      if (drag === n) { n.vx = 0; n.vy = 0; return; }
+      n.vx *= 0.82; n.vy *= 0.82;
+      n.x += n.vx * alpha; n.y += n.vy * alpha;
+      n.x = Math.max(16, Math.min(W - 16, n.x));
+      n.y = Math.max(16, Math.min(H - 16, n.y));
+    });
+    alpha = Math.max(0.02, alpha * 0.995);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    links.forEach(function (l) {
+      ctx.beginPath();
+      ctx.moveTo(l.s.x, l.s.y); ctx.lineTo(l.t.x, l.t.y);
+      if (l.d.kind === 'company') { ctx.setLineDash([4, 5]); ctx.strokeStyle = '#B9D8C9'; ctx.lineWidth = 1; }
+      else { ctx.setLineDash([]); ctx.strokeStyle = '#6FB89B'; ctx.lineWidth = 1.6; }
+      ctx.stroke(); ctx.setLineDash([]);
+    });
+    nodes.forEach(function (n) {
+      var r = n === hover ? 11 : 8;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = colorOf(n.d); ctx.fill();
+      if (n.d.due) { ctx.lineWidth = 2.5; ctx.strokeStyle = '#C9731A'; ctx.stroke(); }
+      ctx.fillStyle = '#0E2B27'; ctx.font = '12px "DM Sans", sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(n.d.name, n.x, n.y - r - 5);
+    });
+    if (hover && hover.d.company) {
+      ctx.fillStyle = '#3F5F58'; ctx.font = '11px "DM Sans", sans-serif';
+      ctx.fillText(hover.d.company, hover.x, hover.y + 22);
+    }
+  }
+
+  function loop() { step(); draw(); requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
+
+  function at(ev) {
+    var rect = canvas.getBoundingClientRect();
+    var p = ev.touches ? ev.touches[0] : ev;
+    return { x: p.clientX - rect.left, y: p.clientY - rect.top };
+  }
+  function pick(pt) {
+    var best = null, bd = 18 * 18;
+    nodes.forEach(function (n) {
+      var dx = n.x - pt.x, dy = n.y - pt.y, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = n; }
+    });
+    return best;
+  }
+
+  var moved = false;
+  function down(ev) { var n = pick(at(ev)); if (n) { drag = n; moved = false; alpha = Math.max(alpha, 0.4); if (ev.cancelable) ev.preventDefault(); } }
+  function move(ev) {
+    var pt = at(ev);
+    if (drag) { drag.x = pt.x; drag.y = pt.y; moved = true; if (ev.cancelable) ev.preventDefault(); }
+    else { hover = pick(pt); }
+  }
+  function up() {
+    if (drag && !moved) { window.location = '/m/people/p?id=' + encodeURIComponent(drag.d.id); }
+    drag = null;
+  }
+  canvas.addEventListener('mousedown', down);
+  canvas.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+  canvas.addEventListener('touchstart', down, { passive: false });
+  canvas.addEventListener('touchmove', move, { passive: false });
+  canvas.addEventListener('touchend', up);
+})();
+</script>
+{{end}}
